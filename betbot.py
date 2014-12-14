@@ -20,6 +20,20 @@ class Event(object):
         self.league = league
         self.quotes = {}
 
+    def __str__(self):
+        out = StringIO()
+        print('{:=^44}'.format((self.sport + ' - ' + self.league).upper()),
+              file=out)
+        for match, sites_quotes in self.quotes.items():
+            print('-' * 44, file=out)
+            print('| {:^40} |'.format(match), file=out)
+            print('-' * 44, file=out)
+            for site, quotes in sites_quotes.items():
+                print('| {0:<16} | {1[0]:>5.2f} | {1[1]:>5.2f} | {1[2]:>5.2f} |'
+                      .format(site, quotes), file=out)
+            print('', file=out)
+        return out.getvalue()
+
     def make_id(self, teams):
         return ' VS '.join(t.lower() for t in teams)
 
@@ -81,7 +95,7 @@ class SitesManager(object):
                     if site_league_quotes:
                         event.add_site_quotes(site.__class__.__name__,
                                               site_league_quotes)
-                print(event.quotes)
+                print(event)
 
 
 class Site(object):
@@ -143,7 +157,7 @@ class BWin(Site):
                 continue
             teams = tuple(event['details']['short_name'].split(' - '))
             matches_quotes[teams] = tuple(
-                result['odds'] for result in game['results'])
+                float(result['odds']) for result in game['results'])
         return matches_quotes
 
 
