@@ -104,6 +104,37 @@ class Sisal(Site):
         return matches_quotes
 
 
+class Bet365(Site):
+    url = ('https://mobile.bet365.it/sport/coupon/?ptid={sport}&key='
+           '1-1-13-{location}-2-17-0-0-1-0-0-4100-0-0-1-0-0-0-0-0-0')
+    url_params = {
+        'soccer': {
+            'id': 4100,
+            'locations': {
+                'poland': '26304997',
+                'cipro': '26404811',
+            },
+        },
+    }
+
+    def parse_response(self, response):
+        if DEBUG: print('Parsing response as HTML tree for Bet365')
+        data = BytesIO(response.text.encode('utf-8'))
+        parser = etree.HTMLParser(remove_blank_text=True, remove_comments=True,
+                                  recover=True)
+        html = etree.parse(data, parser)
+        match_nodes = html.getroot().xpath(
+            '//th[@class="DarkMidGrey"][@colspan="2"]')
+        quote_nodes = html.getroot().xpath(
+            '//td[contains(@class, "nFTRr2")]')
+        matches_quotes = {}
+        for match, quotes in zip(
+                match_nodes,
+                (quote_nodes[i:i+3] for i in range(0, len(quote_nodes), 3))):
+            matches_quotes[match.text] = tuple(
+                float(quote.text) for quote in quotes)
+        return matches_quotes
+
 if __name__ == '__main__':
-    sites_manager = SitesManager([Sisal(), BWin()])
+    sites_manager = SitesManager([Sisal(), BWin(), Bet365()])
     sites_manager.check_for_sure_bets('soccer', 'cipro')
