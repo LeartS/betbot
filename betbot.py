@@ -7,14 +7,37 @@ DEBUG = True
 class SitesManager(object):
 
     def __init__(self, sites=[]):
-        self.sites = sites
+        self.leagues = {}
+        self.sites = []
+        for site in sites:
+            self.add_site(site)
+        if DEBUG:
+            print('SitesManager initialized')
+            print('Sites registered: {}'.format(
+                ', '.join([s.__class__.__name__ for s in self.sites])))
+            print('Leagues registered: {}'.format(self.leagues))
 
     def add_site(self, site):
-        self.sites.push_back(site)
+        # update the global leagues set to include this site leagues
+        for sport in site.url_params:
+            if not sport in self.leagues:
+                self.leagues[sport] = set()
+            self.leagues[sport].update(
+                set(site.url_params[sport]['leagues'].keys()))
+        # add the site
+        self.sites.append(site)
 
-    def check_for_sure_bets(self, sport=None, location=None):
-        for site in self.sites:
-            print(site.get_league_quotes(sport, location))
+    def check_for_sure_bets(self, sports=None):
+        if sports is None:
+            sports = self.leagues.keys()
+        for sport in sports:
+            for league in self.leagues[sport]:
+                events = {}
+                for site in self.sites:
+                    site_league_quotes = site.get_league_quotes(sport, league)
+                    if site_league_quotes:
+                        print(site_league_quotes)
+
 
 class Site(object):
     url = ''
@@ -24,37 +47,38 @@ class Site(object):
         if DEBUG: print('Parsing reponse for generic site')
         pass
 
-    def get_league_quotes(self, sport, location):
+    def get_league_quotes(self, sport, league):
         if DEBUG:
             print('Checking quotes for {}-{} on {}'.format(
-                sport, location, self.__class__.__name__))
+                sport, league, self.__class__.__name__))
         try:
             sport_id = self.url_params[sport]['id']
-            location_id = self.url_params[sport]['locations'][location]
+            league_id = self.url_params[sport]['leagues'][league]
         except KeyError:
             # This site does not have this league, so no quotes
             return []
         response = requests.get(self.url.format(sport=sport_id,
-                                                location=location_id))
+                                                league=league_id))
+        if DEBUG:
+            print(self.url.format(sport=sport_id, league=league_id))
         return self.parse_response(response)
 
 
 class BWin(Site):
     url = ('https://it-it.mobileapi.bwinlabs.com/api/iphone/v2/events/search?'
-           'sportid={sport}&regionid={location}&fields=details.('
+           'sportid={sport}&leagueid={league}&fields=details.('
            'short_name%2Cstarts_at%2Cleague%2Cparticipants)%2Cscore_board'
            '%2Ctype%2Ceventids%2Cgames%5B0%5D.(id%2Cname%2C'
            'results.(name%2Codds))&sort=live%20desc%2Cstartsat%20asc%2Csportid'
            '%20asc%2Ceventname%20asc&content=list&page_number=1&page_size=40'
            '&partnerid=mobit2013')
-    # url = 'https://m.bwin.it/#/?sport={sport}&location={location}'
     url_params = {
         'soccer': {
             'id': 4,
-            'locations': {
-                'poland': 22,
-                'cipro': 58,
-                'israel': 62,
+            'leagues': {
+                'poland-ekstraklasa': 21543,
+                'cipro-1-division': 39123,
+                'israel-premier-league': 24835,
             },
         }
     }
@@ -75,14 +99,14 @@ class BWin(Site):
 
 
 class Sisal(Site):
-    url = 'http://mobile.sisal.it/events_wap.t?league={sport}_{location}'
+    url = 'http://mobile.sisal.it/events_wap.t?league={sport}_{league}'
     url_params = {
         'soccer': {
             'id': 1,
-            'locations': {
-                'poland': 183,
-                'cipro': 290,
-                'israel': 215,
+            'leagues': {
+                'poland-ekstraklasa': 183,
+                'cipro-1-division': 290,
+                'israel-premier-league': 215,
             },
         }
     }
@@ -108,14 +132,14 @@ class Sisal(Site):
 
 class Bet365(Site):
     url = ('https://mobile.bet365.it/sport/coupon/?ptid={sport}&key='
-           '1-1-13-{location}-2-17-0-0-1-0-0-4100-0-0-1-0-0-0-0-0-0')
+           '1-1-13-{league}-2-17-0-0-1-0-0-4100-0-0-1-0-0-0-0-0-0')
     url_params = {
         'soccer': {
             'id': 4100,
-            'locations': {
-                'poland': '26304997',
-                'cipro': '26404811',
-                'israel': '26405613',
+            'leagues': {
+                'poland-ekstraklasa': '26304997',
+                'cipro-1-division': '26404811',
+                'israel-premier-league': '26405613',
             },
         },
     }
@@ -140,4 +164,4 @@ class Bet365(Site):
 
 if __name__ == '__main__':
     sites_manager = SitesManager([Sisal(), BWin(), Bet365()])
-    sites_manager.check_for_sure_bets('soccer', 'cipro')
+    sites_manager.check_for_sure_bets()
