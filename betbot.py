@@ -9,6 +9,45 @@ logger = logging.getLogger('betbot')
 logging.basicConfig(level=logging.ERROR)
 
 
+class Event(object):
+    """
+    An event is a day of a league of a sport.
+    An event can have multiple matches.
+    """
+
+    def __init__(self, sport, league):
+        self.sport = sport
+        self.league = league
+        self.quotes = {}
+
+    def make_id(self, teams):
+        return ' VS '.join(t.lower() for t in teams)
+
+    def get_or_create_match(self, teams, quotes):
+        """
+        Associate this match with one of the saved one from this event,
+        by looking at similarities of teams, quotes, and possibly other factors
+        in the future (like start time).
+        If this is a new match (i.e. we can't find a similar one), create it.
+        """
+
+        def quote_distance(quote_a, quote_b):
+            return sum(abs(1/q_a - 1/q_b) for q_a, q_b in zip(quote_a, quote_b))
+
+        for match, site_quotes in self.quotes.items():
+            for site, s_quotes in site_quotes.items():
+                if quote_distance(s_quotes, quotes) < 0.05:
+                    return match
+        match_id = self.make_id(teams)
+        self.quotes[match_id] = {}
+        return match_id
+
+    def add_site_quotes(self, site_name, quotes):
+        for match_teams, match_quotes in quotes.items():
+            match_id = self.get_or_create_match(match_teams, match_quotes)
+            self.quotes[match_id][site_name] = match_quotes
+
+
 class SitesManager(object):
 
     def __init__(self, sites=[]):
@@ -36,11 +75,13 @@ class SitesManager(object):
             sports = self.leagues.keys()
         for sport in sports:
             for league in self.leagues[sport]:
-                events = {}
+                event = Event(sport, league)
                 for site in self.sites:
                     site_league_quotes = site.get_league_quotes(sport, league)
                     if site_league_quotes:
-                        print(site_league_quotes)
+                        event.add_site_quotes(site.__class__.__name__,
+                                              site_league_quotes)
+                print(event.quotes)
 
 
 class Site(object):
@@ -100,7 +141,8 @@ class BWin(Site):
                 game = game[0]
             except IndexError:
                 continue
-            matches_quotes[event['details']['short_name']] = tuple(
+            teams = tuple(event['details']['short_name'].split(' - '))
+            matches_quotes[teams] = tuple(
                 result['odds'] for result in game['results'])
         return matches_quotes
 
@@ -132,7 +174,7 @@ class Sisal(Site):
         for match, quotes in zip(
                 match_nodes,
                 (quote_nodes[i:i+3] for i in range(0, len(quote_nodes), 3))):
-            matches_quotes[match.text] = tuple(
+            matches_quotes[tuple(match.text.split(' - '))] = tuple(
                 float(quote.text.replace(',', '.')) for quote in quotes)
         return matches_quotes
 
@@ -165,7 +207,7 @@ class Bet365(Site):
         for match, quotes in zip(
                 match_nodes,
                 (quote_nodes[i:i+3] for i in range(0, len(quote_nodes), 3))):
-            matches_quotes[match.text] = tuple(
+            matches_quotes[tuple(match.text.split(' v '))] = tuple(
                 float(quote.text) for quote in quotes)
         return matches_quotes
 
