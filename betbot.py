@@ -54,6 +54,7 @@ class BWin(Site):
             'locations': {
                 'poland': 22,
                 'cipro': 58,
+                'israel': 62,
             },
         }
     }
@@ -81,6 +82,7 @@ class Sisal(Site):
             'locations': {
                 'poland': 183,
                 'cipro': 290,
+                'israel': 215,
             },
         }
     }
@@ -113,6 +115,7 @@ class Bet365(Site):
             'locations': {
                 'poland': '26304997',
                 'cipro': '26404811',
+                'israel': '26405613',
             },
         },
     }
