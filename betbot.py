@@ -1,8 +1,13 @@
 import requests
+import logging
+import argparse
 from io import BytesIO, StringIO
 from lxml import etree
 
-DEBUG = True
+
+logger = logging.getLogger('betbot')
+logging.basicConfig(level=logging.ERROR)
+
 
 class SitesManager(object):
 
@@ -11,11 +16,10 @@ class SitesManager(object):
         self.sites = []
         for site in sites:
             self.add_site(site)
-        if DEBUG:
-            print('SitesManager initialized')
-            print('Sites registered: {}'.format(
-                ', '.join([s.__class__.__name__ for s in self.sites])))
-            print('Leagues registered: {}'.format(self.leagues))
+        logger.info('SitesManager initialized')
+        logger.info('Sites registered: {}'.format(
+            ', '.join([s.__class__.__name__ for s in self.sites])))
+        logger.info('Leagues registered: {}'.format(self.leagues))
 
     def add_site(self, site):
         # update the global leagues set to include this site leagues
@@ -44,23 +48,26 @@ class Site(object):
     url_params = {}
 
     def parse_response(self, reponse):
-        if DEBUG: print('Parsing reponse for generic site')
+        logger.debug('Parsing reponse for generic site')
         pass
 
     def get_league_quotes(self, sport, league):
-        if DEBUG:
-            print('Checking quotes for {}-{} on {}'.format(
-                sport, league, self.__class__.__name__))
+        logger.info('Checking quotes for {}-{} on {}'.format(
+            sport, league, self.__class__.__name__))
         try:
             sport_id = self.url_params[sport]['id']
             league_id = self.url_params[sport]['leagues'][league]
         except KeyError:
             # This site does not have this league, so no quotes
             return []
+        headers = {
+            'User-Agent': ('Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:34.0)'
+                           'Gecko/20100101 Firefox/34.0')
+        }
         response = requests.get(self.url.format(sport=sport_id,
-                                                league=league_id))
-        if DEBUG:
-            print(self.url.format(sport=sport_id, league=league_id))
+                                                league=league_id),
+                                headers=headers)
+        logger.debug(self.url.format(sport=sport_id, league=league_id))
         return self.parse_response(response)
 
 
@@ -84,7 +91,7 @@ class BWin(Site):
     }
 
     def parse_response(self, response):
-        if DEBUG: print('Parsing quotes as JSON for BWin')
+        logger.debug('Parsing quotes as JSON for BWin')
         data = response.json()
         matches_quotes = {}
         for event in data['response']['items']['events']:
@@ -112,7 +119,7 @@ class Sisal(Site):
     }
 
     def parse_response(self, response):
-        if DEBUG: print('Parsing response as HTML tree for Sisal')
+        logger.debug('Parsing response as HTML tree for Sisal')
         data = BytesIO(response.text.encode('utf-8'))
         parser = etree.HTMLParser(remove_blank_text=True, remove_comments=True,
                                   recover=True)
@@ -145,7 +152,7 @@ class Bet365(Site):
     }
 
     def parse_response(self, response):
-        if DEBUG: print('Parsing response as HTML tree for Bet365')
+        logger.debug('Parsing response as HTML tree for Bet365')
         data = BytesIO(response.text.encode('utf-8'))
         parser = etree.HTMLParser(remove_blank_text=True, remove_comments=True,
                                   recover=True)
@@ -163,5 +170,14 @@ class Bet365(Site):
         return matches_quotes
 
 if __name__ == '__main__':
+    # App config
+    log_levels = ['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL']
+    parser = argparse.ArgumentParser(description='Find sure bets.')
+    parser.add_argument('-l', '--log-level', default='WARNING',
+                        choices=log_levels, dest='log_level',
+                        type=lambda x: x.upper())
+    args = parser.parse_args()
+    logger.setLevel(getattr(logging, args.log_level))
+
     sites_manager = SitesManager([Sisal(), BWin(), Bet365()])
     sites_manager.check_for_sure_bets()
